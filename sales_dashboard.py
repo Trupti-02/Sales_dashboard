@@ -8,24 +8,41 @@ Original file is located at
 """
 
 
+# sales_dashboard.py
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+# Set page config
 st.set_page_config(page_title="Sales Dashboard", layout="wide")
-st.title(" Sales Dashboard - Sample Sales Data")
+st.title("📊 Sales Dashboard - Sample Sales Data")
 
 # Upload CSV
-uploaded_file = st.file_uploader("/content/sales_data_sample.csv", type=["csv"])
+uploaded_file = st.file_uploader("Upload your 'sales_data_sample.csv' file", type=["csv"])
 if uploaded_file:
-    df = pd.read_csv(uploaded_file, parse_dates=['ORDERDATE'])
+    # Read the CSV with correct encoding
+    df = pd.read_csv(uploaded_file, encoding='latin1', parse_dates=['ORDERDATE'])
 
     # Sidebar filters
-    st.sidebar.header("Filter Data")
+    st.sidebar.header("🧰 Filter Data")
 
-    region = st.sidebar.multiselect("Select Territory", df['TERRITORY'].dropna().unique(), default=df['TERRITORY'].dropna().unique())
-    product = st.sidebar.multiselect("Select Product Line", df['PRODUCTLINE'].unique(), default=df['PRODUCTLINE'].unique())
-    date_range = st.sidebar.date_input("Select Date Range", [df['ORDERDATE'].min(), df['ORDERDATE'].max()])
+    region = st.sidebar.multiselect(
+        "Select Territory", 
+        options=df['TERRITORY'].dropna().unique(), 
+        default=df['TERRITORY'].dropna().unique()
+    )
+
+    product = st.sidebar.multiselect(
+        "Select Product Line", 
+        options=df['PRODUCTLINE'].unique(), 
+        default=df['PRODUCTLINE'].unique()
+    )
+
+    date_range = st.sidebar.date_input(
+        "Select Date Range", 
+        [df['ORDERDATE'].min(), df['ORDERDATE'].max()]
+    )
 
     # Filtered data
     filtered_df = df[
@@ -35,7 +52,7 @@ if uploaded_file:
         (df['ORDERDATE'] <= pd.to_datetime(date_range[1]))
     ]
 
-    # Display KPIs
+    # Key Metrics
     st.subheader("📈 Key Metrics")
     total_sales = filtered_df['SALES'].sum()
     total_units = filtered_df['QUANTITYORDERED'].sum()
@@ -46,23 +63,39 @@ if uploaded_file:
     col2.metric("Total Units Sold", f"{total_units:,}")
     col3.metric("Avg. Unit Cost ($)", f"{avg_unit_cost:,.2f}")
 
-    # Bar chart - Sales by Item
-    st.subheader("🔍 Sales by Product (Item)")
-    product_sales = filtered_df.groupby("PRODUCTLINE")["SALES"].sum().reset_index().sort_values(by="SALES", ascending=False)
+    # Sales by Product Line
+    st.subheader("🔍 Sales by Product Line")
+    product_sales = (
+        filtered_df.groupby("PRODUCTLINE")["SALES"]
+        .sum().reset_index()
+        .sort_values(by="SALES", ascending=False)
+    )
     fig1 = px.bar(product_sales, x="PRODUCTLINE", y="SALES", color="PRODUCTLINE", text_auto=".2s")
+    fig1.update_layout(yaxis_tickprefix="$")
     st.plotly_chart(fig1, use_container_width=True)
 
-    # Line chart - Sales over time
+    # Sales Over Time
     st.subheader("📅 Sales Over Time")
-    time_series = filtered_df.groupby("ORDERDATE")["SALES"].sum().reset_index()
+    time_series = (
+        filtered_df.groupby("ORDERDATE")["SALES"]
+        .sum().reset_index()
+        .sort_values("ORDERDATE")
+    )
     fig2 = px.line(time_series, x="ORDERDATE", y="SALES", markers=True)
+    fig2.update_layout(yaxis_tickprefix="$")
     st.plotly_chart(fig2, use_container_width=True)
 
-    # Top 5 Regions
+    # Top 5 Regions by Sales
     st.subheader("🌍 Top 5 Performing Regions")
-    top_regions = filtered_df.groupby("TERRITORY")["SALES"].sum().sort_values(ascending=False).head(5).reset_index()
+    top_regions = (
+        filtered_df.groupby("TERRITORY")["SALES"]
+        .sum().sort_values(ascending=False)
+        .head(5).reset_index()
+    )
     fig3 = px.bar(top_regions, x="TERRITORY", y="SALES", color="TERRITORY", text_auto=".2s")
+    fig3.update_layout(yaxis_tickprefix="$")
     st.plotly_chart(fig3, use_container_width=True)
 
 else:
-    st.info("👆 Upload the Kaggle 'sample-sales-data.csv' file to begin.")
+    st.info("👆 Please upload the 'sales_data_sample.csv' file to begin.")
+
