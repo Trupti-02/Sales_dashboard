@@ -20,7 +20,7 @@ matplotlib – Forecast components visualization
 How to Use
 
 1. Clone the repository:
-git clone https://github.com/yourusername/sales-dashboard-forecast.git
+git clone  https://github.com/Trupti-02/Sales_dashboard.git
 cd sales-dashboard-forecast
 
 2. Install dependencies:
