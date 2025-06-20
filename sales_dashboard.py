@@ -14,35 +14,24 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Set page config
 st.set_page_config(page_title="Sales Dashboard", layout="wide")
 st.title("📊 Sales Dashboard - Sample Sales Data")
 
 # Upload CSV
 uploaded_file = st.file_uploader("Upload your 'sales_data_sample.csv' file", type=["csv"])
 if uploaded_file:
-    # Read the CSV with correct encoding
-    df = pd.read_csv(uploaded_file, encoding='latin1', parse_dates=['ORDERDATE'])
+    try:
+        df = pd.read_csv(uploaded_file, encoding='latin1', parse_dates=['ORDERDATE'])
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+        st.stop()
 
     # Sidebar filters
-    st.sidebar.header("🧰 Filter Data")
-
-    region = st.sidebar.multiselect(
-        "Select Territory", 
-        options=df['TERRITORY'].dropna().unique(), 
-        default=df['TERRITORY'].dropna().unique()
-    )
-
-    product = st.sidebar.multiselect(
-        "Select Product Line", 
-        options=df['PRODUCTLINE'].unique(), 
-        default=df['PRODUCTLINE'].unique()
-    )
-
-    date_range = st.sidebar.date_input(
-        "Select Date Range", 
-        [df['ORDERDATE'].min(), df['ORDERDATE'].max()]
-    )
+    with st.sidebar:
+        st.header("🧰 Filter Data")
+        region = st.multiselect("Select Territory", df['TERRITORY'].dropna().unique(), default=df['TERRITORY'].dropna().unique())
+        product = st.multiselect("Select Product Line", df['PRODUCTLINE'].unique(), default=df['PRODUCTLINE'].unique())
+        date_range = st.date_input("Select Date Range", [df['ORDERDATE'].min(), df['ORDERDATE'].max()])
 
     # Filtered data
     filtered_df = df[
@@ -52,50 +41,85 @@ if uploaded_file:
         (df['ORDERDATE'] <= pd.to_datetime(date_range[1]))
     ]
 
-    # Key Metrics
-    st.subheader("📈 Key Metrics")
-    total_sales = filtered_df['SALES'].sum()
-    total_units = filtered_df['QUANTITYORDERED'].sum()
-    avg_unit_cost = filtered_df['PRICEEACH'].mean()
+    if filtered_df.empty:
+        st.warning("⚠️ No data matches the selected filters.")
+        st.stop()
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Sales ($)", f"{total_sales:,.2f}")
-    col2.metric("Total Units Sold", f"{total_units:,}")
-    col3.metric("Avg. Unit Cost ($)", f"{avg_unit_cost:,.2f}")
+    # Setup Tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "📊 Visualizations", "🌍 Top Insights", "📋 Data & Export"])
 
-    # Sales by Product Line
-    st.subheader("🔍 Sales by Product Line")
-    product_sales = (
-        filtered_df.groupby("PRODUCTLINE")["SALES"]
-        .sum().reset_index()
-        .sort_values(by="SALES", ascending=False)
-    )
-    fig1 = px.bar(product_sales, x="PRODUCTLINE", y="SALES", color="PRODUCTLINE", text_auto=".2s")
-    fig1.update_layout(yaxis_tickprefix="$")
-    st.plotly_chart(fig1, use_container_width=True)
+    # --- TAB 1: OVERVIEW ---
+    with tab1:
+        st.subheader("Key Performance Indicators")
+        total_sales = filtered_df['SALES'].sum()
+        total_units = filtered_df['QUANTITYORDERED'].sum()
+        avg_unit_cost = filtered_df['PRICEEACH'].mean()
+        most_popular = filtered_df.groupby("PRODUCTLINE")["QUANTITYORDERED"].sum().idxmax()
+        best_region = filtered_df.groupby("TERRITORY")["SALES"].sum().idxmax()
 
-    # Sales Over Time
-    st.subheader("📅 Sales Over Time")
-    time_series = (
-        filtered_df.groupby("ORDERDATE")["SALES"]
-        .sum().reset_index()
-        .sort_values("ORDERDATE")
-    )
-    fig2 = px.line(time_series, x="ORDERDATE", y="SALES", markers=True)
-    fig2.update_layout(yaxis_tickprefix="$")
-    st.plotly_chart(fig2, use_container_width=True)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Sales ($)", f"{total_sales:,.2f}")
+        col2.metric("Total Units Sold", f"{total_units:,}")
+        col3.metric("Avg. Unit Cost ($)", f"{avg_unit_cost:,.2f}")
 
-    # Top 5 Regions by Sales
-    st.subheader("🌍 Top 5 Performing Regions")
-    top_regions = (
-        filtered_df.groupby("TERRITORY")["SALES"]
-        .sum().sort_values(ascending=False)
-        .head(5).reset_index()
-    )
-    fig3 = px.bar(top_regions, x="TERRITORY", y="SALES", color="TERRITORY", text_auto=".2s")
-    fig3.update_layout(yaxis_tickprefix="$")
-    st.plotly_chart(fig3, use_container_width=True)
+        col4, col5 = st.columns(2)
+        col4.metric("Most Popular Product", most_popular)
+        col5.metric("Top Performing Region", best_region)
+
+    # --- TAB 2: VISUALIZATIONS ---
+    with tab2:
+        st.subheader("Sales by Product Line")
+        product_sales = filtered_df.groupby("PRODUCTLINE")["SALES"].sum().reset_index().sort_values(by="SALES", ascending=False)
+        fig1 = px.bar(product_sales, x="PRODUCTLINE", y="SALES", color="PRODUCTLINE", text_auto=".2s")
+        fig1.update_layout(yaxis_tickprefix="$")
+        st.plotly_chart(fig1, use_container_width=True)
+
+        st.subheader("Sales Over Time")
+        time_series = filtered_df.groupby("ORDERDATE")["SALES"].sum().reset_index().sort_values("ORDERDATE")
+        fig2 = px.line(time_series, x="ORDERDATE", y="SALES", markers=True)
+        fig2.update_layout(yaxis_tickprefix="$")
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.subheader("Monthly Sales Trend")
+        monthly_df = filtered_df.copy()
+        monthly_df['Month'] = monthly_df['ORDERDATE'].dt.to_period('M').astype(str)
+        fig_month = px.bar(monthly_df.groupby("Month")["SALES"].sum().reset_index(), x="Month", y="SALES")
+        fig_month.update_layout(yaxis_tickprefix="$")
+        st.plotly_chart(fig_month, use_container_width=True)
+
+        st.subheader("Product Line Share (Pie Chart)")
+        fig_pie = px.pie(product_sales, names='PRODUCTLINE', values='SALES', hole=0.4)
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # --- TAB 3: TOP INSIGHTS ---
+    with tab3:
+        st.subheader("Top 5 Performing Regions")
+        top_regions = filtered_df.groupby("TERRITORY")["SALES"].sum().sort_values(ascending=False).head(5).reset_index()
+        fig4 = px.bar(top_regions, x="TERRITORY", y="SALES", color="TERRITORY", text_auto=".2s")
+        fig4.update_layout(yaxis_tickprefix="$")
+        st.plotly_chart(fig4, use_container_width=True)
+
+        st.subheader("Top 5 Products by Revenue")
+        top_products = filtered_df.groupby("PRODUCTLINE")["SALES"].sum().sort_values(ascending=False).head(5).reset_index()
+        fig5 = px.bar(top_products, x="PRODUCTLINE", y="SALES", color="PRODUCTLINE", text_auto=".2s")
+        fig5.update_layout(yaxis_tickprefix="$")
+        st.plotly_chart(fig5, use_container_width=True)
+
+        st.subheader("Average Unit Price by Product Line")
+        avg_price = filtered_df.groupby("PRODUCTLINE")["PRICEEACH"].mean().reset_index()
+        fig6 = px.bar(avg_price, x="PRODUCTLINE", y="PRICEEACH", color="PRODUCTLINE", text_auto=".2f")
+        fig6.update_layout(yaxis_tickprefix="$")
+        st.plotly_chart(fig6, use_container_width=True)
+
+    # --- TAB 4: DATA TABLE + EXPORT ---
+    with tab4:
+        st.subheader("Filtered Sales Records")
+        st.dataframe(filtered_df.style.background_gradient(cmap="YlGnBu", subset=["SALES", "QUANTITYORDERED"]))
+
+        csv = filtered_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Filtered Data", csv, "filtered_sales.csv", "text/csv")
 
 else:
     st.info("👆 Please upload the 'sales_data_sample.csv' file to begin.")
+
 
