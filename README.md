@@ -1,3 +1,5 @@
+Streamlit App : https://salesdashboard-pals9v9nnz9y5ptl9luj76.streamlit.app/
+
 Sales Dashboard with Forecasting
 A dynamic and interactive Streamlit dashboard for analyzing and forecasting sales data. This app lets users explore key performance metrics, visualize trends, identify top-performing regions and products, and predict future sales using Facebook Prophet.
 
