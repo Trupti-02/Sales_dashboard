@@ -13,6 +13,7 @@ Original file is located at
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from prophet import Prophet
 
 st.set_page_config(page_title="Sales Dashboard", layout="wide")
 st.title("📊 Sales Dashboard - Sample Sales Data")
@@ -45,8 +46,11 @@ if uploaded_file:
         st.warning("⚠️ No data matches the selected filters.")
         st.stop()
 
-    # Setup Tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "📊 Visualizations", "🌍 Top Insights", "📋 Data & Export"])
+   # Setup Tabs 
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📈 Overview", "📊 Visualizations", "🌍 Top Insights", "📋 Data & Export", "📈 Forecasting"
+    ])
+
 
     # --- TAB 1: OVERVIEW ---
     with tab1:
@@ -118,6 +122,53 @@ if uploaded_file:
 
         csv = filtered_df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Filtered Data", csv, "filtered_sales.csv", "text/csv")
+    
+    
+    # === FORECASTING TAB ===
+    with tab5:
+        st.subheader("Sales Forecasting by Product Line")
+    
+        # Let user select product line and forecast horizon
+        selected_product = st.selectbox("Select a Product Line", df['PRODUCTLINE'].unique())
+        forecast_period = st.slider("Forecast Horizon (in months)", 1, 12, value=6)
+    
+        # Filter and prepare data
+        forecast_df = df[df['PRODUCTLINE'] == selected_product]
+        ts_data = forecast_df.groupby("ORDERDATE")["SALES"].sum().reset_index()
+        ts_data.columns = ['ds', 'y']  # Required format for Prophet
+    
+        if len(ts_data) < 30:
+            st.warning("⚠️ Not enough data to forecast. Try another product line.")
+        else:
+            with st.spinner("Training Prophet model..."):
+                model = Prophet()
+                model.fit(ts_data)
+    
+                future = model.make_future_dataframe(periods=forecast_period * 30)
+                forecast = model.predict(future)
+    
+            # Plot Forecast with confidence intervals
+            st.subheader(f"📊 {selected_product} Sales Forecast ({forecast_period} months ahead)")
+            fig = px.line(forecast, x="ds", y="yhat", title="Predicted Sales with Confidence Intervals")
+            fig.add_scatter(x=forecast['ds'], y=forecast['yhat_upper'], mode='lines', name='Upper Bound')
+            fig.add_scatter(x=forecast['ds'], y=forecast['yhat_lower'], mode='lines', name='Lower Bound')
+            fig.update_layout(xaxis_title="Date", yaxis_title="Sales", yaxis_tickprefix="$")
+            st.plotly_chart(fig, use_container_width=True)
+    
+            # Display numeric prediction
+            last_forecast = forecast.iloc[-1]
+            st.markdown(f"""
+            ### 🔍 Forecast Summary
+            - Predicted Sales (end of period): **${last_forecast['yhat']:.2f}**
+            - Confidence Interval: **${last_forecast['yhat_lower']:.2f} – ${last_forecast['yhat_upper']:.2f}**
+            - Model: Facebook Prophet
+            """)
+    
+            # Show seasonal components
+            st.subheader("📉 Forecast Components")
+            fig2 = model.plot_components(forecast)
+            st.pyplot(fig2)
+
 
 else:
     st.info("👆 Please upload the 'sales_data_sample.csv' file to begin.")
